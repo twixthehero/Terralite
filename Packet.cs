@@ -1,0 +1,7 @@
+﻿namespace Terralite
+{
+    public class Packet
+    {
+        public static byte[] DISCONNECT = new byte[] { 0x54, 0x65, 0x72, 0x72, 0x61, 0x63, 0x6f, 0x72, 0x65 };
+    }
+}
