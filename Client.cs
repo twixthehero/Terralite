@@ -395,7 +395,7 @@ namespace Terralite
                 byte[][] pieces = Split(buffer);
 
                 //Process the data
-                if (OnPreReceive(pieces[0]))
+                if (OnPreReceive(pieces[0], pieces[1]))
                     OnReceive(pieces[1], pieces[1].Length);
             }
             else
