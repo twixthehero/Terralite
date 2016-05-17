@@ -45,7 +45,7 @@ namespace Terralite
         /// <param name="packet">Data to send</param>
         public void SendReliable(byte[] packet)
         {
-            GuaranteedPacket gp = new GuaranteedPacket(this, nextID, packet);
+            GuaranteedPacket gp = new GuaranteedPacket(this, nextID, packet, MaxRetries);
             guaranteedPackets.Add(gp.PacketID, gp);
 
             nextID = (ushort)((nextID + 1) % ushort.MaxValue);
@@ -93,7 +93,7 @@ namespace Terralite
         /// Called to remove a packet from the list
         /// </summary>
         /// <param name="id">ID of the packet to remove</param>
-        private void ClearPacket(int id)
+        protected void ClearPacket(int id)
         {
             guaranteedPackets[id].Dispose();
             guaranteedPackets.Remove(id);
@@ -112,12 +112,16 @@ namespace Terralite
             private ReliableClient reliableClient;
             private byte[] data;
             private Timer timer;
+            private int maxTries;
 
-            public GuaranteedPacket(ReliableClient rc, ushort packetID, byte[] packet)
+            private int tries = 0;
+
+            public GuaranteedPacket(ReliableClient rc, ushort packetID, byte[] packet, int retries)
             {
                 PacketID = packetID;
                 reliableClient = rc;
                 data = packet;
+                maxTries = retries;
 
                 MD5 = reliableClient.MD5.ComputeHash(data);
                 Header = CreateHeader();
@@ -161,7 +165,11 @@ namespace Terralite
             /// <param name="e">Event args</param>
             private void OnRetry(object sender, ElapsedEventArgs e)
             {
+                tries++;
                 reliableClient.Send(ByteArray, Header);
+
+                if (tries > maxTries)
+                    reliableClient.ClearPacket(PacketID);
             }
 
             /// <summary>
