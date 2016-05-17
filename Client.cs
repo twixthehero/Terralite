@@ -158,6 +158,8 @@ namespace Terralite
 
                 receiveThread = new Thread(new ThreadStart(ReceiveThread));
                 receiveThread.Start();
+
+                Log("Connected to " + endPoint);
             }
             catch (Exception e)
             {

@@ -89,6 +89,9 @@ namespace Terralite
                     else
                         ip = parts[1];
 
+                    if (ip == "")
+                        ip += "127.0.0.1";
+
                     IPAddress address;
                     success = IPAddress.TryParse(ip, out address);
 
