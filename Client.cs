@@ -221,13 +221,16 @@ namespace Terralite
         /// <remarks>
         /// Note this function does not do anything if <c>IsConnected</c> is false.
         /// </remarks>
-        public void Send(byte[] buffer, byte[] header = null)
+        public void Send(byte[] buffer = null, byte[] header = null)
         {
             if (!IsConnected)
             {
                 Log("Not connected to an endpoint.");
                 return;
             }
+
+            if (buffer == null && header == null)
+                return;
 
             try
             {
@@ -272,8 +275,16 @@ namespace Terralite
         /// <param name="buffer1">The first byte array</param>
         /// <param name="buffer2">The second byte array</param>
         /// <returns><paramref name="buffer1"/> + <paramref name="buffer2"/></returns>
+        /// <remarks>
+        /// If only one buffer is null, it returns that buffer.
+        /// </remarks>
         private byte[] Combine(byte[] buffer1, byte[] buffer2)
         {
+            if (buffer1 == null && buffer2 != null)
+                return buffer2;
+            if (buffer1 != null && buffer2 == null)
+                return buffer1;
+
             byte[] result = new byte[buffer1.Length + buffer2.Length];
 
             Array.Copy(buffer1, 0, result, 0, buffer1.Length);
