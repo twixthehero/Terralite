@@ -295,7 +295,7 @@ namespace Terralite
             result[0] = new byte[index];
             result[1] = new byte[buffer.Length - (index + 1)];
 
-            Array.Copy(buffer, result[0], buffer.Length);
+            Array.Copy(buffer, result[0], result[0].Length);
             Array.Copy(buffer, index, result[1], 0, result[1].Length);
 
             return result;
@@ -333,7 +333,7 @@ namespace Terralite
         /// </summary>
         private void ReceiveThread()
         {
-            byte[] buffer = new byte[MAX_SEND_SIZE];
+            byte[] buffer = null;
 
             EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
 
@@ -341,6 +341,7 @@ namespace Terralite
             {
                 try
                 {
+                    buffer = new byte[MAX_SEND_SIZE];
                     int numBytes = socket.ReceiveFrom(buffer, ref ep);
 
                     ProcessData(buffer, ep);
@@ -349,13 +350,13 @@ namespace Terralite
                 {
                     if (socket.Available == 0)
                         continue;
-                    else
+                    /*else
                     {
                         byte[] remainder = new byte[socket.Available];
                         int extraBytes = socket.ReceiveFrom(remainder, ref ep);
 
                         ProcessData(buffer, ep, remainder);
-                    }
+                    }*/
                 }
                 catch (Exception e)
                 {

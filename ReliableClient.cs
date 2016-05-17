@@ -66,6 +66,12 @@ namespace Terralite
             //if non-reliable packet
             if (type == 1)
                 return true;
+            //if unknown
+            else if (type != 2)
+            {
+                Log("Got unknown packet type " + type);
+                return false;
+            }
 
             ushort packetID = BitConverter.ToUInt16(header, 2);
 
