@@ -33,7 +33,13 @@ namespace Terralite
         /// </summary>
         public Server() : this(DEFAULT_LOG) { }
 
-
+        /// <summary>
+        /// Creates a <c>Server</c> object using <paramref name="logfile"/>
+        /// as the log file.
+        /// </summary>
+        /// <param name="logfile">The logfile to use. Use <c>null</c> for
+        /// no logging.</param>
+        /// <param name="port">The port to use</param>
         public Server(string logfile, int port = DEFAULT_PORT)
         {
             Debug = false;
