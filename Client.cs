@@ -333,7 +333,7 @@ namespace Terralite
         /// </summary>
         private void ReceiveThread()
         {
-            byte[] buffer = new byte[MAX_SIZE];
+            byte[] buffer = new byte[MAX_SEND_SIZE];
 
             EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
 
