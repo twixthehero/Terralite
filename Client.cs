@@ -7,6 +7,9 @@ using System.Threading;
 
 namespace Terralite
 {
+    /// <summary>
+    /// Base client class using UDP
+    /// </summary>
     public class Client
     {
         /// <summary>
