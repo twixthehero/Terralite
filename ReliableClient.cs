@@ -35,8 +35,10 @@ namespace Terralite
 
         public void SendReliable(byte[] packet)
         {
-            GuaranteedPacket gp = new GuaranteedPacket(this, nextID++, packet);
+            GuaranteedPacket gp = new GuaranteedPacket(this, nextID, packet);
             guaranteedPackets.Add(gp.PacketID, gp);
+
+            nextID = (ushort)((nextID + 1) % ushort.MaxValue);
 
             Send(gp.ByteArray);
         }
