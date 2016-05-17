@@ -31,8 +31,11 @@ namespace Terralite
         public delegate void ReceiveEvent(byte[] data, int numBytes);
         public event ReceiveEvent Receive;
 
-        private const string DEFAULT_LOG = "log.txt";
+        protected const string DEFAULT_LOG = "log.txt";
+        protected const int DEFAULT_PORT = 10346;
         private const int MAX_SIZE = 1400;
+        private const int MAX_SEND_SIZE = 1450;
+        private static byte[] HEADER_NON_RELIABLE = new byte[4] { 1, 0, 0, 0 };
 
         private Socket socket;
         private EndPoint endPoint;
@@ -48,8 +51,10 @@ namespace Terralite
         /// Creates a <c>Client</c> object using <paramref name="logfile"/>
         /// as the log file.
         /// </summary>
-        /// <param name="logfile"></param>
-        public Client(string logfile)
+        /// <param name="logfile">The logfile to use. Use <c>null</c> for
+        /// no logging.</param>
+        /// <param name="port">The port to use</param>
+        public Client(string logfile, int port = DEFAULT_PORT)
         {
             Debug = false;
             ExitOnReceiveException = false;
@@ -58,7 +63,7 @@ namespace Terralite
             if (logfile != null)
                 CreateLog(logfile);
 
-            CreateSocket();
+            CreateSocket(port);
         }
 
         /// <summary>
@@ -91,17 +96,32 @@ namespace Terralite
         /// Creates the socket object, sets it to non-blocking, and
         /// binds it to a port.
         /// </summary>
-        private void CreateSocket()
+        /// <param name="port">Port to try and bind to</param>
+        private void CreateSocket(int port)
         {
-            Console.Write("Creating socket...");
+            Log("Creating socket...");
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            Log("OK");
-
             socket.Blocking = false;
 
-            Log("Binding socket...");
-            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
-            Log("Socket bound to " + socket.LocalEndPoint);
+            try
+            {
+                Log("Binding socket...");
+                socket.Bind(new IPEndPoint(IPAddress.Any, port));
+            }
+            catch (SocketException e)
+            {
+                Log(e.Message);
+                if (e.InnerException != null)
+                    Log(e.InnerException);
+                Log(e.StackTrace);
+            }
+            finally
+            {
+                if (!socket.IsBound)
+                    socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+
+                Log("Socket bound to " + socket.LocalEndPoint);
+            }
         }
 
         /// <summary>
@@ -156,7 +176,7 @@ namespace Terralite
         {
             if (!IsConnected)
             {
-                Log("Not connected to an endpoint.");
+                //Log("Not connected to an endpoint.");
                 return;
             }
 
@@ -201,7 +221,7 @@ namespace Terralite
         /// <remarks>
         /// Note this function does not do anything if <c>IsConnected</c> is false.
         /// </remarks>
-        public void Send(byte[] buffer)
+        public void Send(byte[] buffer, byte[] header = null)
         {
             if (!IsConnected)
             {
@@ -211,16 +231,19 @@ namespace Terralite
 
             try
             {
-                if (buffer.Length <= MAX_SIZE)
+                byte[] head = header ?? HEADER_NON_RELIABLE;
+                byte[] data = Combine(head, buffer);
+
+                if (data.Length <= MAX_SEND_SIZE)
                 {
                     if (Debug)
-                        Log("Sending buffer size " + buffer.Length);
+                        Log("Sending data size " + data.Length);
 
-                    socket.SendTo(buffer, endPoint);
+                    socket.SendTo(data, endPoint);
                 }
                 else
                 {
-                    byte[][] packets = SplitBuffer(buffer);
+                    byte[][] packets = SplitBuffer(head, buffer);
 
                     if (Debug)
                         Log("Split buffer into " + packets.GetLength(0) + "packets");
@@ -228,7 +251,7 @@ namespace Terralite
                     foreach (byte[] packet in packets)
                     {
                         if (Debug)
-                            Log("Sending buffer size " + packet.Length);
+                            Log("Sending data size " + packet.Length);
 
                         socket.SendTo(packet, endPoint);
                     }
@@ -244,21 +267,61 @@ namespace Terralite
         }
 
         /// <summary>
+        /// Takes two byte arrays and returns their combination
+        /// </summary>
+        /// <param name="buffer1">The first byte array</param>
+        /// <param name="buffer2">The second byte array</param>
+        /// <returns><paramref name="buffer1"/> + <paramref name="buffer2"/></returns>
+        private byte[] Combine(byte[] buffer1, byte[] buffer2)
+        {
+            byte[] result = new byte[buffer1.Length + buffer2.Length];
+
+            Array.Copy(buffer1, 0, result, 0, buffer1.Length);
+            Array.Copy(buffer2, 0, result, buffer1.Length, buffer2.Length);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Splits <paramref name="buffer"/> into two byte[] at <paramref name="index"/>.
+        /// </summary>
+        /// <param name="buffer">Byte[] to be split</param>
+        /// <param name="index">Index to split at</param>
+        /// <returns>Two byte arrays</returns>
+        private byte[][] Split(byte[] buffer, int index = 4)
+        {
+            byte[][] result = new byte[2][];
+
+            result[0] = new byte[index];
+            result[1] = new byte[buffer.Length - (index + 1)];
+
+            Array.Copy(buffer, result[0], buffer.Length);
+            Array.Copy(buffer, index, result[1], 0, result[1].Length);
+
+            return result;
+        }
+
+        /// <summary>
         /// Takes <paramref name="buffer"/> and returns an array of byte[]
         /// that each hold up to MAX_SIZE (1400 bytes) of data.
         /// </summary>
+        /// <param name="header">Header to be appended</param>
         /// <param name="buffer">Data to be split</param>
         /// <returns></returns>
-        private byte[][] SplitBuffer(byte[] buffer)
+        private byte[][] SplitBuffer(byte[] header, byte[] buffer)
         {
             byte[][] result = new byte[buffer.Length / MAX_SIZE][];
             int size;
 
+            byte[] tmp;
+
             for (uint i = 0; i < result.GetLength(0); i++)
             {
                 size = i == result.GetLength(0) - 1 ? buffer.Length % MAX_SIZE : MAX_SIZE;
-                result[i] = new byte[size];
-                Array.Copy(buffer, i * 1400, result[i], 0, size);
+                tmp = new byte[4 + size];
+                Array.Copy(buffer, i * 1404, tmp, 0, size);
+
+                result[i] = Combine(header, tmp);
             }
 
             return result;
@@ -327,9 +390,13 @@ namespace Terralite
 
             if (remainder == null)
             {
+                //pieces[0] = 4 byte header
+                //pieces[1] = data
+                byte[][] pieces = Split(buffer);
+
                 //Process the data
-                if (OnPreReceive(buffer))
-                    OnReceive(buffer, buffer.Length);
+                if (OnPreReceive(pieces[0]))
+                    OnReceive(pieces[1], pieces[1].Length);
             }
             else
             {
@@ -338,9 +405,7 @@ namespace Terralite
                 Array.Copy(buffer, data, buffer.Length);
                 Array.Copy(remainder, 0, data, buffer.Length, remainder.Length);
 
-                //Process the data
-                if (OnPreReceive(data))
-                    OnReceive(data, data.Length);
+                ProcessData(data, ep);
             }
         }
 

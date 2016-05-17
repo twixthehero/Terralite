@@ -44,6 +44,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Client.cs" />
+    <Compile Include="ConsoleClient.cs" />
+    <Compile Include="Packet.cs" />
+    <Compile Include="ReliableClient.cs" />
     <Compile Include="TerraliteException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
