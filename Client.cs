@@ -412,9 +412,10 @@ namespace Terralite
         /// <summary>
         /// Called before <c>OnReceive</c> to do packet preprocessing.
         /// </summary>
-        /// <param name="data">Packet to do preprocessing with</param>
+        /// <param name="header">Header of packet</param>
+        /// <param name="data">Packet data to do preprocessing with</param>
         /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
-        protected virtual bool OnPreReceive(byte[] data)
+        protected virtual bool OnPreReceive(byte[] header, byte[] data)
         {
             return true;
         }

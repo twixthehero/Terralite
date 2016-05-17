@@ -9,6 +9,7 @@ namespace Terralite
     public class ReliableClient : Client
     {
         public int MaxRetries { get; set; }
+        public bool UseMD5 { get; set; }
         public MD5 MD5 { get; private set; }
         /// <summary>
         /// Interval to retry sending in millisenconds
@@ -23,16 +24,25 @@ namespace Terralite
         {
             MaxRetries = 10;
             RetryInterval = 0.3f;
+            UseMD5 = true;
 
             MD5 = MD5.Create();
             guaranteedPackets = new Dictionary<int, GuaranteedPacket>();
         }
 
+        /// <summary>
+        /// Sends <paramref name="text"/> reliably and encoded as UTF8
+        /// </summary>
+        /// <param name="text">Text to send</param>
         public void SendReliable(string text)
         {
             SendReliable(Encoding.UTF8.GetBytes(text));
         }
 
+        /// <summary>
+        /// Reliably sends <paramref name="packet"/>
+        /// </summary>
+        /// <param name="packet">Data to send</param>
         public void SendReliable(byte[] packet)
         {
             GuaranteedPacket gp = new GuaranteedPacket(this, nextID, packet);
@@ -43,7 +53,13 @@ namespace Terralite
             Send(gp.ByteArray);
         }
 
-        protected override bool OnPreReceive(byte[] header)
+        /// <summary>
+        /// Called before <c>OnReceive</c> to do packet preprocessing.
+        /// </summary>
+        /// <param name="header">Header of packet</param>
+        /// <param name="data">Packet data to do preprocessing with</param>
+        /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
+        protected override bool OnPreReceive(byte[] header, byte[] data)
         {
             ushort type = BitConverter.ToUInt16(header, 0);
 
@@ -55,8 +71,16 @@ namespace Terralite
 
             if (guaranteedPackets.ContainsKey(packetID))
             {
-                guaranteedPackets[packetID].Dispose();
-                guaranteedPackets.Remove(packetID);
+                if (UseMD5)
+                {
+                    byte[] hash = new byte[32];
+                    Array.Copy(data, hash, hash.Length);
+
+                    if (guaranteedPackets[packetID].CheckMD5(hash))
+                        ClearPacket(packetID);
+                }
+                else
+                    ClearPacket(packetID);
 
                 return true;
             }
@@ -65,6 +89,19 @@ namespace Terralite
             return false;
         }
 
+        /// <summary>
+        /// Called to remove a packet from the list
+        /// </summary>
+        /// <param name="id">ID of the packet to remove</param>
+        private void ClearPacket(int id)
+        {
+            guaranteedPackets[id].Dispose();
+            guaranteedPackets.Remove(id);
+        }
+
+        /// <summary>
+        /// Class to hold data about a guaranteed packet
+        /// </summary>
         private class GuaranteedPacket
         {
             public ushort PacketID { get; private set; }
@@ -92,16 +129,45 @@ namespace Terralite
                 timer.Start();
             }
 
+            /// <summary>
+            /// Checks a byte[] md5 sum against this packet's MD5 sum
+            /// </summary>
+            /// <param name="sum">MD5 hash sum</param>
+            /// <returns>Whether the MD5s match</returns>
+            public bool CheckMD5(byte[] sum)
+            {
+                if (sum.Length != MD5.Length)
+                    return false;
+
+                for (int i = 0; i < sum.Length; i++)
+                    if (MD5[i] != sum[i])
+                        return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Called when this packet has been acknowledged.
+            /// </summary>
             public void Dispose()
             {
                 timer.Stop();
             }
 
+            /// <summary>
+            /// Called each time timer.Elapsed fires to retry sending
+            /// </summary>
+            /// <param name="sender">Object that fired the event</param>
+            /// <param name="e">Event args</param>
             private void OnRetry(object sender, ElapsedEventArgs e)
             {
                 reliableClient.Send(ByteArray, Header);
             }
 
+            /// <summary>
+            /// Creates a byte array containing the header information.
+            /// </summary>
+            /// <returns>Byte array with type 2 + packet id</returns>
             private byte[] CreateHeader()
             {
                 byte[] header = new byte[4];
@@ -115,6 +181,10 @@ namespace Terralite
                 return header;
             }
 
+            /// <summary>
+            /// Creates a byte array containing the MD5 and packet data.
+            /// </summary>
+            /// <returns>Byte array with MD5 + packet data</returns>
             private byte[] ToByteArray()
             {
                 byte[] packet = new byte[MD5.Length + data.Length];
