@@ -48,6 +48,7 @@
     <Compile Include="Packet.cs" />
     <Compile Include="ReliableClient.cs" />
     <Compile Include="ReliableServer.cs" />
+    <Compile Include="SafeList.cs" />
     <Compile Include="Server.cs" />
     <Compile Include="TerraliteException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
