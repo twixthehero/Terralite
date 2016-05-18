@@ -18,6 +18,11 @@ namespace Terralite
         public bool Debug { get; set; }
 
         /// <summary>
+        /// Whether the server is bound to a local address or external address
+        /// </summary>
+        public bool IsLocal { get; private set; }
+
+        /// <summary>
         /// Whether the server is currently running
         /// </summary>
         public bool IsRunning { get; protected set; }
@@ -46,21 +51,16 @@ namespace Terralite
         private SafeList<SessionPacket> packets;
 
         /// <summary>
-        /// Creates a <c>Server</c> object with the default
-        /// log file (log.txt).
+        /// Creates a <c>Server</c> object.
         /// </summary>
-        public Server() : this(DEFAULT_LOG) { }
-
-        /// <summary>
-        /// Creates a <c>Server</c> object using <paramref name="logfile"/>
-        /// as the log file.
-        /// </summary>
+        /// <param name="local">Whether to bind to a local address. Default value is true.</param>
+        /// <param name="port">The port to use. Default value is DEFAULT_PORT (10346)</param>
         /// <param name="logfile">The logfile to use. Use <c>null</c> for
-        /// no logging.</param>
-        /// <param name="port">The port to use</param>
-        public Server(string logfile, int port = DEFAULT_PORT)
+        /// no logging. Default value is DEFAULT_LOG (log.txt)</param>
+        public Server(bool local = true, int port = DEFAULT_PORT, string logfile = DEFAULT_LOG)
         {
             Debug = false;
+            IsLocal = local;
             Port = port;
 
             packets = new SafeList<SessionPacket>();
@@ -83,19 +83,43 @@ namespace Terralite
 
         /// <summary>
         /// Creates the socket object, sets it to non-blocking, and
-        /// binds it to a port.
+        /// binds it to the value of <c>Port</c>.
         /// </summary>
-        /// <param name="port">Port to try and bind to</param>
-        private void CreateSocket(int port)
+        private void CreateSocket()
         {
             Log("Creating socket...");
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
 
+            IPEndPoint endPoint = null;
+
             try
             {
+                if (IsLocal)
+                    endPoint = new IPEndPoint(IPAddress.Any, Port);
+                else
+                {
+                    IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
+
+                    for (int i = 0; i < ipHostInfo.AddressList.Length; i++)
+                        if (ipHostInfo.AddressList[i].AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            IPAddress ip = ipHostInfo.AddressList[i];
+                            byte zone = ip.GetAddressBytes()[0];
+
+                            if (zone != 192 && zone != 10)
+                            {
+                                endPoint = new IPEndPoint(ip, Port);
+                                break;
+                            }
+                        }
+
+                    if (endPoint == null)
+                        endPoint = new IPEndPoint(IPAddress.Any, Port);
+                }
+
                 Log("Binding socket...");
-                socket.Bind(new IPEndPoint(IPAddress.Any, port));
+                socket.Bind(endPoint);
             }
             catch (SocketException e)
             {
@@ -107,7 +131,7 @@ namespace Terralite
             finally
             {
                 if (!socket.IsBound)
-                    socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+                    socket.Bind(new IPEndPoint(endPoint.Address, 0));
 
                 Log("Socket bound to " + socket.LocalEndPoint);
             }
@@ -122,7 +146,7 @@ namespace Terralite
 
             IsRunning = true;
 
-            CreateSocket(Port);
+            CreateSocket();
 
             receiveThread = new Thread(new ThreadStart(ReceiveThread));
             packetThread = new Thread(new ThreadStart(PacketThread));

@@ -56,19 +56,13 @@ namespace Terralite
         private Dictionary<EndPoint, byte> nextExpectedID;
 
         /// <summary>
-        /// Creates a <c>ReliableServer</c> object with the default
-        /// log file (log.txt).
-        /// </summary>
-        public ReliableServer() : this(DEFAULT_LOG) { }
-
-        /// <summary>
         /// Creates a <c>ReliableServer</c> object using <paramref name="logfile"/>
         /// as the log file.
         /// </summary>
         /// <param name="logfile">The logfile to use. Use <c>null</c> for
         /// no logging.</param>
         /// <param name="port">The port to use</param>
-        public ReliableServer(string logfile, int port = DEFAULT_PORT) : base(logfile, port)
+        public ReliableServer(bool local = true, int port = DEFAULT_PORT, string logfile = DEFAULT_LOG) : base(local, port, logfile)
         {
             MaxRetries = 10;
             RetryInterval = 0.3f;
