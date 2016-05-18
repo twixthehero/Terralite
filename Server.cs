@@ -271,7 +271,7 @@ namespace Terralite
                 SessionPacket sp = packets[0];
                 packets.RemoveAt(0);
 
-                if (OnPreReceive(sp.Header, sp.Data))
+                if (OnPreReceive(sp.RemoteEndPoint, sp.Header, sp.Data))
                     OnReceive(sp.RemoteEndPoint, sp.Data, sp.Length);
             }
         }

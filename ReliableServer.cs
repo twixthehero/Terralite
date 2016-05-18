@@ -77,7 +77,9 @@ namespace Terralite
 
             MD5 = MD5.Create();
             guaranteedPackets = new Dictionary<EndPoint, Dictionary<byte, GuaranteedPacket>>();
+            nextSendID = new Dictionary<EndPoint, byte>();
             orderedPackets = new Dictionary<EndPoint, OrderedDictionary>();
+            nextExpectedID = new Dictionary<EndPoint, byte>();
         }
 
         /// <summary>
