@@ -96,6 +96,11 @@ namespace Terralite
             Send(dest, gp.ByteArray);
         }
 
+        /// <summary>
+        /// Gets the next guaranteed packet id for <paramref name="dest"/>.
+        /// </summary>
+        /// <param name="dest">The destination EndPoint</param>
+        /// <returns></returns>
         private byte GetNextSendID(EndPoint dest)
         {
             if (!nextSendID.ContainsKey(dest))
