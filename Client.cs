@@ -33,11 +33,12 @@ namespace Terralite
 
         protected const string DEFAULT_LOG = "log.txt";
         protected const int DEFAULT_PORT = 10346;
-        private static byte[] HEADER_NON_RELIABLE = new byte[4] { 1, 0, 0, 0 };
 
         private Socket socket;
         private EndPoint endPoint;
         private Thread receiveThread;
+
+        private byte[][] multiPacket = null;
 
         /// <summary>
         /// Creates a <c>Client</c> object with the default
@@ -215,8 +216,8 @@ namespace Terralite
         /// <summary>
         /// Sends the <paramref name="buffer"/> to the <c>RemoteEndPoint</c>
         /// </summary>
-        /// <param name="buffer">A byte[] of data to send. Data bigger
-        /// than 1400 bytes will be split across multiple calls to
+        /// <param name="buffer">A byte[] of data to send. If the buffer plus header
+        /// is bigger than 1400 bytes, it will be split across multiple calls to
         /// Socket.SendTo</param>
         /// <remarks>
         /// Note this function does not do anything if <c>IsConnected</c> is false.
@@ -234,7 +235,7 @@ namespace Terralite
 
             try
             {
-                byte[] head = header ?? HEADER_NON_RELIABLE;
+                byte[] head = header ?? Packet.HEADER_NON_RELIABLE;
                 byte[] data = Combine(head, buffer);
 
                 if (data.Length <= Packet.MAX_SEND_SIZE)
@@ -294,62 +295,35 @@ namespace Terralite
         }
 
         /// <summary>
-        /// Splits <paramref name="buffer"/> into two byte[] at <paramref name="index"/>.
-        /// If index is -1, it calculates where to split using the packet type.
-        /// </summary>
-        /// <param name="buffer">Byte[] to be split</param>
-        /// <param name="index">Index to split at</param>
-        /// <returns>Two byte arrays</returns>
-        private byte[][] Split(byte[] buffer, int index = -1)
-        {
-            byte[][] result = new byte[2][];
-
-            //calculate index from header
-            if (index == -1)
-            {
-                switch (buffer[0])
-                {
-                    case Packet.NON_RELIABLE:
-                        index = 1;
-                        break;
-                    case Packet.RELIABLE:
-                    case Packet.ACK:
-                        index = 2;
-                        break;
-                    case Packet.MULTI:
-                        index = 3;
-                        break;
-                }
-            }
-
-            result[0] = new byte[index];
-            result[1] = new byte[buffer.Length - (index + 1)];
-
-            Array.Copy(buffer, result[0], result[0].Length);
-            Array.Copy(buffer, index, result[1], 0, result[1].Length);
-
-            return result;
-        }
-
-        /// <summary>
         /// Takes <paramref name="buffer"/> and returns an array of byte[]
-        /// that each hold up to MAX_SIZE (1400 bytes) of data.
+        /// that each holds <paramref name="head"/> plus up to MAX_SIZE (1400 bytes) of data.
         /// </summary>
-        /// <param name="header">Header to be appended</param>
+        /// <param name="head">Header to be appended</param>
         /// <param name="buffer">Data to be split</param>
         /// <returns></returns>
-        private byte[][] SplitBuffer(byte[] header, byte[] buffer)
+        private byte[][] SplitBuffer(byte[] head, byte[] buffer)
         {
             byte[][] result = new byte[buffer.Length / Packet.MAX_SIZE][];
             int size;
 
+            MemoryStream s;
             byte[] tmp;
+            byte[] header;
+            byte pid = 1;
 
             for (uint i = 0; i < result.GetLength(0); i++)
             {
+                s = new MemoryStream(5);
+                s.WriteByte(Packet.MULTI);
+                s.WriteByte((byte)result.GetLength(0));
+                s.WriteByte(pid++);
+                s.Write(head, 0, head.Length);
+                header = new byte[s.Length];
+                s.Read(header, 0, header.Length);
+
                 size = i == result.GetLength(0) - 1 ? buffer.Length % Packet.MAX_SIZE : Packet.MAX_SIZE;
-                tmp = new byte[4 + size];
-                Array.Copy(buffer, i * 1404, tmp, 0, size);
+                tmp = new byte[header.Length + size];
+                Array.Copy(buffer, i * (Packet.MAX_SIZE + header.Length), tmp, 0, size);
 
                 result[i] = Combine(header, tmp);
             }
@@ -399,38 +373,90 @@ namespace Terralite
         /// </summary>
         /// <param name="buffer">Main data being processed</param>
         /// <param name="ep">EndPoint the data came from</param>
-        /// <param name="remainder">Data that did not fit in the first ReceiveFrom call</param>
-        /// <remarks>
-        /// If <paramref name="remainder"/> is not <c>null</c>, it is combined with data
-        /// into one array.
-        /// </remarks>
-        protected virtual void ProcessData(byte[] buffer, EndPoint ep, byte[] remainder = null)
+        protected virtual void ProcessData(byte[] buffer, EndPoint ep)
         {
             if (!ep.Equals(endPoint))
             {
                 Log("Received data from unknown remote: " + ep);
                 return;
             }
+            
+            //pieces[0] = header
+            //pieces[1] = data
+            byte[][] pieces = buffer[0] != Packet.MULTI ? Split(buffer) : ProcessMulti(buffer);
 
-            if (remainder == null)
+            //Process the data
+            if (OnPreReceive(pieces[0], pieces[1]))
+                OnReceive(pieces[1], pieces[1].Length);
+        }
+
+        /// <summary>
+        /// Splits <paramref name="buffer"/> into two byte[] at <paramref name="index"/>.
+        /// If index is -1, it calculates where to split using the packet type.
+        /// </summary>
+        /// <param name="buffer">Byte[] to be split</param>
+        /// <param name="index">Index to split at</param>
+        /// <returns>Two byte arrays</returns>
+        private byte[][] Split(byte[] buffer, int index = -1)
+        {
+            byte[][] result = new byte[2][];
+
+            //calculate index from header
+            if (index == -1)
             {
-                //pieces[0] = header
-                //pieces[1] = data
-                byte[][] pieces = Split(buffer);
-
-                //Process the data
-                if (OnPreReceive(pieces[0], pieces[1]))
-                    OnReceive(pieces[1], pieces[1].Length);
+                switch (buffer[0])
+                {
+                    case Packet.NON_RELIABLE:
+                        index = 1;
+                        break;
+                    case Packet.RELIABLE:
+                    case Packet.ACK:
+                        index = 2;
+                        break;
+                }
             }
-            else
-            {
-                //Create one buffer with the entire data
-                byte[] data = new byte[buffer.Length + remainder.Length];
-                Array.Copy(buffer, data, buffer.Length);
-                Array.Copy(remainder, 0, data, buffer.Length, remainder.Length);
 
-                ProcessData(data, ep);
-            }
+            result[0] = new byte[index];
+            result[1] = new byte[buffer.Length - (index + 1)];
+
+            Array.Copy(buffer, result[0], result[0].Length);
+            Array.Copy(buffer, index, result[1], 0, result[1].Length);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Handles storing multi-part packets and reconstructing when all
+        /// have arrived.
+        /// </summary>
+        /// <param name="buffer">One part of the whole packet</param>
+        /// <returns>null if all data hasn't been received, otherwise
+        /// Two byte arrays</returns>
+        private byte[][] ProcessMulti(byte[] buffer)
+        {
+            //Create a byte array of arrays for storing the parts of this multi packet
+            if (multiPacket == null)
+                multiPacket = new byte[buffer[1]][];
+
+            //Initialize this slot in the array and copy
+            multiPacket[buffer[2]] = new byte[buffer.Length - 3];
+            Array.Copy(buffer, 3, multiPacket[buffer[2]], 0, multiPacket[buffer[2]].Length);
+
+            //If we don't have all the packets, return null
+            for (int i = 0; i < multiPacket.Length; i++)
+                if (multiPacket[i] == null)
+                    return null;
+
+            MemoryStream ms = new MemoryStream();
+            for (int i = 0; i < multiPacket.Length; i++)
+                ms.Write(multiPacket[i], 0, multiPacket[i].Length);
+
+            byte[] whole = new byte[ms.Length];
+            ms.Read(whole, 0, whole.Length);
+
+            multiPacket = null;
+
+            return Split(whole);
         }
 
         /// <summary>

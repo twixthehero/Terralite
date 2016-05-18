@@ -10,5 +10,7 @@
         public const byte RELIABLE = 2;
         public const byte MULTI = 3;
         public const byte ACK = 4;
+
+        public static byte[] HEADER_NON_RELIABLE = new byte[1] { 1 };
     }
 }
