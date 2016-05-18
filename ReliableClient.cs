@@ -341,7 +341,7 @@ namespace Terralite
                 timer = new Timer(timeout);
                 timer.Elapsed += (sender, args) =>
                 {
-                    rc.OnPacketTimeout(PacketID);
+                    reliableClient.OnPacketTimeout(PacketID);
                 };
                 timer.Start();
             }
