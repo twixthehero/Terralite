@@ -184,7 +184,7 @@ namespace Terralite
             try
             {
                 receiveThread.Abort();
-                socket.SendTo(Packet.DISCONNECT, endPoint);
+                Send(Packet.DISCONNECT_PACKET);
                 socket.Shutdown(SocketShutdown.Both);
                 socket.Close();
 

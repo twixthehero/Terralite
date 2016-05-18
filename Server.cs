@@ -275,7 +275,7 @@ namespace Terralite
                 SessionPacket sp = packets[0];
                 packets.RemoveAt(0);
 
-                if (OnPreReceive(sp.RemoteEndPoint, sp.Header, sp.Data))
+                if (OnPreReceive(sp))
                     OnReceive(sp.RemoteEndPoint, sp.Data, sp.Length);
             }
         }
@@ -283,11 +283,9 @@ namespace Terralite
         /// <summary>
         /// Called before <c>OnReceive</c> to do packet preprocessing.
         /// </summary>
-        /// <param name="source">Where the packet came from</param>
-        /// <param name="header">Header of packet</param>
-        /// <param name="data">Packet data to do preprocessing with</param>
+        /// <param name="packet">The packet received</param>
         /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
-        protected virtual bool OnPreReceive(EndPoint source, byte[] header, byte[] data)
+        protected virtual bool OnPreReceive(SessionPacket packet)
         {
             return true;
         }
@@ -321,16 +319,18 @@ namespace Terralite
         /// <summary>
         /// Class to hold data about a packet from a specific end point.
         /// </summary>
-        private class SessionPacket
+        protected class SessionPacket
         {
             public EndPoint RemoteEndPoint { get; private set; }
             public byte[] Header { get; private set; }
             public byte[] Data { get; private set; }
             public int Length { get; private set; }
+            public bool IsDisconnect { get; private set; }
 
             public SessionPacket(EndPoint remoteEP, byte[] data, int len)
             {
                 RemoteEndPoint = remoteEP;
+                IsDisconnect = false;
 
                 switch (data[0])
                 {
@@ -346,6 +346,9 @@ namespace Terralite
                         Array.Copy(data, Data, Length);
                         break;
                     case Packet.MULTI:
+                        break;
+                    case Packet.DISCONNECT:
+                        IsDisconnect = true;
                         break;
                 }
             }

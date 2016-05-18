@@ -116,12 +116,19 @@ namespace Terralite
         /// <summary>
         /// Called before <c>OnReceive</c> to do packet preprocessing.
         /// </summary>
-        /// <param name="source">Where the packet came from</param>
-        /// <param name="header">Header of packet</param>
-        /// <param name="data">Packet data to do preprocessing with</param>
+        /// <param name="packet">The packet received</param>
         /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
-        protected override bool OnPreReceive(EndPoint source, byte[] header, byte[] data)
+        protected override bool OnPreReceive(SessionPacket sp)
         {
+            if (sp.IsDisconnect)
+            {
+                orderedPackets.Remove(sp.RemoteEndPoint);
+                return false;
+            }
+
+            EndPoint source = sp.RemoteEndPoint;
+            byte[] header = sp.Header;
+            byte[] data = sp.Data;
             byte type = header[0];
 
             //if non-reliable packet
@@ -176,8 +183,7 @@ namespace Terralite
 
                                 return true;
                             }
-
-                            //TODO - remove ordereddictionaries when clients disconnect
+                            
                             if (!orderedPackets.ContainsKey(source))
                                 orderedPackets.Add(source, new OrderedDictionary());
 

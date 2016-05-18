@@ -65,5 +65,30 @@ namespace Terralite
 
             return result;
         }
+
+        /// <summary>
+        /// Used to compare two byte arrays.
+        /// </summary>
+        /// <param name="buffer1">Byte array one</param>
+        /// <param name="buffer2">Byte array two</param>
+        /// <returns>Returns whether or not their data is equal</returns>
+        public static bool Compare(byte[] buffer1, byte[] buffer2)
+        {
+            if (buffer1 == buffer2)
+                return true;
+
+            if ((buffer1 == null && buffer2 != null) ||
+                (buffer1 != null && buffer2 == null))
+                return false;
+
+            if (buffer1.Length != buffer2.Length)
+                return false;
+
+            for (int i = 0; i < buffer1.Length; i++)
+                if (buffer1[i] != buffer2[i])
+                    return false;
+
+            return true;
+        }
     }
 }
