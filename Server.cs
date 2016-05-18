@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Terralite
 {
@@ -15,6 +16,9 @@ namespace Terralite
         /// </summary>
         public bool Debug { get; set; }
 
+        /// <summary>
+        /// Whether the server is currently running
+        /// </summary>
         public bool IsRunning { get; protected set; }
 
         /// <summary>
@@ -22,10 +26,23 @@ namespace Terralite
         /// </summary>
         public bool ExitOnReceiveException { get; set; }
 
+        /// <summary>
+        /// The port the server is/will be bound to
+        /// </summary>
+        private int Port { get; set; }
+
+        public delegate void ReceiveEvent(EndPoint remoteEP, byte[] data, int numBytes);
+        public event ReceiveEvent Receive;
+
         protected const string DEFAULT_LOG = "log.txt";
         protected const int DEFAULT_PORT = 10346;
 
         private Socket socket;
+
+        private Thread receiveThread;
+        private Thread packetThread;
+
+        private SafeList<SessionPacket> packets;
 
         /// <summary>
         /// Creates a <c>Server</c> object with the default
@@ -43,15 +60,14 @@ namespace Terralite
         public Server(string logfile, int port = DEFAULT_PORT)
         {
             Debug = false;
+            Port = port;
+
+            packets = new SafeList<SessionPacket>();
 
             if (logfile != null)
                 CreateLog(logfile);
 
-            CreateSocket(port);
-
-            //TODO
-
-            IsRunning = true;
+            Start();
         }
 
         /// <summary>
@@ -97,6 +113,114 @@ namespace Terralite
         }
 
         /// <summary>
+        /// Called to create the server socket and threads.
+        /// </summary>
+        public void Start()
+        {
+            if (IsRunning) return;
+
+            IsRunning = true;
+
+            CreateSocket(Port);
+
+            receiveThread = new Thread(new ThreadStart(ReceiveThread));
+            packetThread = new Thread(new ThreadStart(PacketThread));
+
+            receiveThread.Start();
+            packetThread.Start();
+        }
+
+        /// <summary>
+        /// Called to stop the running threads and close the socket.
+        /// </summary>
+        public void Stop()
+        {
+            if (!IsRunning) return;
+
+            IsRunning = false;
+
+            receiveThread.Abort();
+            packetThread.Abort();
+
+            socket.Shutdown(SocketShutdown.Both);
+            socket.Close();
+        }
+
+        /// <summary>
+        /// Receive thread function. Reads data from the socket and creates
+        /// <c>SessionPackets</c>.
+        /// </summary>
+        private void ReceiveThread()
+        {
+            EndPoint clientEndPoint = new IPEndPoint(IPAddress.Any, 0);
+            byte[] buffer;
+
+            while (IsRunning)
+            {
+                try
+                {
+                    buffer = new byte[Packet.MAX_SEND_SIZE];
+                    int len = socket.ReceiveFrom(buffer, ref clientEndPoint);
+                    packets.Add(new SessionPacket(clientEndPoint, buffer, len));
+                }
+                catch (SocketException)
+                {
+                    if (socket.Available == 0)
+                        continue;
+                }
+                catch (Exception e)
+                {
+                    Log(e.Message);
+                    if (e.InnerException != null)
+                        Log(e.InnerException);
+                    Log(e.StackTrace);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Packet thread function. Handles invoking the Receive event.
+        /// </summary>
+        private void PacketThread()
+        {
+            while (IsRunning)
+            {
+                SessionPacket sp = packets[0];
+                packets.RemoveAt(0);
+
+                if (OnPreReceive(sp.Header, sp.Data))
+                    OnReceive(sp.RemoteEndPoint, sp.Data, sp.Length);
+            }
+        }
+
+        /// <summary>
+        /// Called before <c>OnReceive</c> to do packet preprocessing.
+        /// </summary>
+        /// <param name="header">Header of packet</param>
+        /// <param name="data">Packet data to do preprocessing with</param>
+        /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
+        protected virtual bool OnPreReceive(byte[] header, byte[] data)
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Called when data has been received. Invokes all functions
+        /// stored in the Receive event.
+        /// </summary>
+        /// <param name="endPoint">Where this packet came from</param>
+        /// <param name="packet">Packet data</param>
+        /// <param name="len">Length of the data</param>
+        /// <remarks>
+        /// Note this function does not do anything if <c>Receive</c> is <c>null</c>.
+        /// </remarks>
+        protected void OnReceive(EndPoint endPoint, byte[] packet, int len)
+        {
+            if (Receive != null && len > 0)
+                Receive(endPoint, packet, len);
+        }
+
+        /// <summary>
         /// Helper function to shorten output lines.
         /// </summary>
         /// <typeparam name="T">Type that <paramref name="obj"/> is</typeparam>
@@ -104,6 +228,39 @@ namespace Terralite
         protected void Log<T>(T obj)
         {
             Console.WriteLine(obj);
+        }
+
+        /// <summary>
+        /// Class to hold data about a packet from a specific end point.
+        /// </summary>
+        private class SessionPacket
+        {
+            public EndPoint RemoteEndPoint { get; private set; }
+            public byte[] Header { get; private set; }
+            public byte[] Data { get; private set; }
+            public int Length { get; private set; }
+
+            public SessionPacket(EndPoint remoteEP, byte[] data, int len)
+            {
+                RemoteEndPoint = remoteEP;
+
+                switch (data[0])
+                {
+                    case Packet.NON_RELIABLE:
+                        Length = len - 1;
+                        Header = new byte[] { data[0] };
+                        break;
+                    case Packet.RELIABLE:
+                    case Packet.ACK:
+                        Length = len - 2;
+                        Header = new byte[] { data[0], data[1] };
+                        Data = new byte[Length];
+                        Array.Copy(data, Data, Length);
+                        break;
+                    case Packet.MULTI:
+                        break;
+                }
+            }
         }
     }
 }
