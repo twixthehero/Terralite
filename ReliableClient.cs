@@ -49,15 +49,25 @@ namespace Terralite
         /// </remarks>
         public bool UseOrdering { get; set; }
 
-        private const float ORDER_TIMEOUT = 0.5f;
-
         private Dictionary<byte, GuaranteedPacket> guaranteedPackets;
         private byte nextSendID = 1;
 
         private OrderedDictionary orderedPackets;
         private byte nextExpectedID;
 
+        /// <summary>
+        /// Creates a <c>ReliableClient</c> object with the default
+        /// log file (log.txt).
+        /// </summary>
         public ReliableClient() : this(DEFAULT_LOG) { }
+
+        /// <summary>
+        /// Creates a <c>ReliableClient</c> object using <paramref name="logfile"/>
+        /// as the log file.
+        /// </summary>
+        /// <param name="logfile">The logfile to use. Use <c>null</c> for
+        /// no logging.</param>
+        /// <param name="port">The port to use</param>
         public ReliableClient(string logfile, int port = DEFAULT_PORT) : base(logfile, port)
         {
             MaxRetries = 10;
@@ -156,7 +166,7 @@ namespace Terralite
                                 return true;
                             }
 
-                            orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data, ORDER_TIMEOUT));
+                            orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data, Packet.ORDER_TIMEOUT));
                             return false;
                         }
                     case Packet.ACK:

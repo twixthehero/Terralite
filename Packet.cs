@@ -12,5 +12,10 @@
         public const byte ACK = 4;
 
         public static byte[] HEADER_NON_RELIABLE = new byte[1] { 1 };
+
+        /// <summary>
+        /// How long to wait until processing a packet that didn't come in order
+        /// </summary>
+        public const float ORDER_TIMEOUT = 0.5f;
     }
 }
