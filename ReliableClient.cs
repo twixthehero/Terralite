@@ -266,7 +266,7 @@ namespace Terralite
             }
 
             /// <summary>
-            /// Called each time timer.Elapsed fires to retry sending
+            /// Called each time timer. Elapsed fires to retry sending
             /// </summary>
             /// <param name="sender">Object that fired the event</param>
             /// <param name="e">Event args</param>

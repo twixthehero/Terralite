@@ -338,6 +338,7 @@ namespace Terralite
         private void ReceiveThread()
         {
             byte[] buffer = null;
+            byte[] truncated = null;
 
             EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
 
@@ -347,8 +348,10 @@ namespace Terralite
                 {
                     buffer = new byte[Packet.MAX_SEND_SIZE];
                     int numBytes = socket.ReceiveFrom(buffer, ref ep);
+                    truncated = new byte[numBytes];
+                    Array.Copy(buffer, truncated, truncated.Length);
 
-                    ProcessData(buffer, ep);
+                    ProcessData(truncated, ep);
                 }
                 catch (SocketException)
                 {
@@ -417,7 +420,7 @@ namespace Terralite
             }
 
             result[0] = new byte[index];
-            result[1] = new byte[buffer.Length - (index + 1)];
+            result[1] = new byte[buffer.Length - index];
 
             Array.Copy(buffer, result[0], result[0].Length);
             Array.Copy(buffer, index, result[1], 0, result[1].Length);
