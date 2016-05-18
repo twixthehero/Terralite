@@ -206,7 +206,7 @@ namespace Terralite
         /// </summary>
         /// <param name="text">A string of text to send</param>
         /// <remarks>
-        /// Note this function does not do anything if IsConnected is false.
+        /// Note this function does not do anything if <c>IsConnected</c> is false.
         /// </remarks>
         public void Send(string text)
         {
@@ -219,6 +219,7 @@ namespace Terralite
         /// <param name="buffer">A byte[] of data to send. If the buffer plus header
         /// is bigger than 1400 bytes, it will be split across multiple calls to
         /// Socket.SendTo</param>
+        /// <param name="header">Header to append to the buffer</param>
         /// <remarks>
         /// Note this function does not do anything if <c>IsConnected</c> is false.
         /// </remarks>
@@ -236,7 +237,7 @@ namespace Terralite
             try
             {
                 byte[] head = header ?? Packet.HEADER_NON_RELIABLE;
-                byte[] data = Combine(head, buffer);
+                byte[] data = Utils.Combine(head, buffer);
 
                 if (data.Length <= Packet.MAX_SEND_SIZE)
                 {
@@ -247,7 +248,7 @@ namespace Terralite
                 }
                 else
                 {
-                    byte[][] packets = SplitBuffer(head, buffer);
+                    byte[][] packets = Utils.SplitBuffer(head, buffer);
 
                     if (Debug)
                         Log("Split buffer into " + packets.GetLength(0) + "packets");
@@ -261,74 +262,13 @@ namespace Terralite
                     }
                 }
             }
-            catch (SocketException e)
+            catch (Exception e)
             {
                 Log(e.Message);
                 if (e.InnerException != null)
                     Log(e.InnerException);
                 Log(e.StackTrace);
             }
-        }
-
-        /// <summary>
-        /// Takes two byte arrays and returns their combination
-        /// </summary>
-        /// <param name="buffer1">The first byte array</param>
-        /// <param name="buffer2">The second byte array</param>
-        /// <returns><paramref name="buffer1"/> + <paramref name="buffer2"/></returns>
-        /// <remarks>
-        /// If only one buffer is null, it returns that buffer.
-        /// </remarks>
-        private byte[] Combine(byte[] buffer1, byte[] buffer2)
-        {
-            if (buffer1 == null && buffer2 != null)
-                return buffer2;
-            if (buffer1 != null && buffer2 == null)
-                return buffer1;
-
-            byte[] result = new byte[buffer1.Length + buffer2.Length];
-
-            Array.Copy(buffer1, 0, result, 0, buffer1.Length);
-            Array.Copy(buffer2, 0, result, buffer1.Length, buffer2.Length);
-
-            return result;
-        }
-
-        /// <summary>
-        /// Takes <paramref name="buffer"/> and returns an array of byte[]
-        /// that each holds <paramref name="head"/> plus up to MAX_SIZE (1400 bytes) of data.
-        /// </summary>
-        /// <param name="head">Header to be appended</param>
-        /// <param name="buffer">Data to be split</param>
-        /// <returns></returns>
-        private byte[][] SplitBuffer(byte[] head, byte[] buffer)
-        {
-            byte[][] result = new byte[buffer.Length / Packet.MAX_SIZE][];
-            int size;
-
-            MemoryStream s;
-            byte[] tmp;
-            byte[] header;
-            byte pid = 1;
-
-            for (uint i = 0; i < result.GetLength(0); i++)
-            {
-                s = new MemoryStream(5);
-                s.WriteByte(Packet.MULTI);
-                s.WriteByte((byte)result.GetLength(0));
-                s.WriteByte(pid++);
-                s.Write(head, 0, head.Length);
-                header = new byte[s.Length];
-                s.Read(header, 0, header.Length);
-
-                size = i == result.GetLength(0) - 1 ? buffer.Length % Packet.MAX_SIZE : Packet.MAX_SIZE;
-                tmp = new byte[header.Length + size];
-                Array.Copy(buffer, i * (Packet.MAX_SIZE + header.Length), tmp, 0, size);
-
-                result[i] = Combine(header, tmp);
-            }
-
-            return result;
         }
 
         /// <summary>

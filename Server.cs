@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -147,6 +148,86 @@ namespace Terralite
         }
 
         /// <summary>
+        /// Send <paramref name="buffer"/> to <paramref name="endPoint"/>
+        /// </summary>
+        /// <param name="endPoint">EndPoint to send data to</param>
+        /// <param name="buffer">Data to send</param>
+        /// <param name="header">Header to append to the buffer</param>
+        /// <remarks>
+        /// Note this function does not do anything if <c>IsRunning</c> is false.
+        /// </remarks>
+        public void Send(EndPoint endPoint, byte[] buffer, byte[] header = null)
+        {
+            if (!IsRunning)
+            {
+                Log("Server is not started.");
+                return;
+            }
+
+            try
+            {
+                byte[] head = header ?? Packet.HEADER_NON_RELIABLE;
+                byte[] data = Utils.Combine(head, buffer);
+
+                if (data.Length <= Packet.MAX_SEND_SIZE)
+                {
+                    if (Debug)
+                        Log("Sending data size " + data.Length);
+
+                    socket.SendTo(data, endPoint);
+                }
+                else
+                {
+                    byte[][] packets = Utils.SplitBuffer(head, buffer);
+
+                    if (Debug)
+                        Log("Split buffer into " + packets.GetLength(0) + "packets");
+
+                    foreach (byte[] packet in packets)
+                    {
+                        if (Debug)
+                            Log("Sending data size " + packet.Length);
+
+                        socket.SendTo(packet, endPoint);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log(e.Message);
+                if (e.InnerException != null)
+                    Log(e.InnerException);
+                Log(e.StackTrace);
+            }
+        }
+
+        /// <summary>
+        /// Convenience function that calls Send(EndPoint, byte[]) on
+        /// each EndPoind in <paramref name="endPoints"/>.
+        /// </summary>
+        /// <param name="endPoints">EndPoints to send data to</param>
+        /// <param name="buffer">Data to send</param>
+        /// <param name="header">Header to append to the buffer</param>
+        public void Send(EndPoint[] endPoints, byte[] buffer, byte[] header = null)
+        {
+            foreach (EndPoint endPoint in endPoints)
+                Send(endPoint, buffer, header);
+        }
+
+        /// <summary>
+        /// Convenience function that calls Send(EndPoint, byte[]) on
+        /// each EndPoind in <paramref name="endPoints"/>.
+        /// </summary>
+        /// <param name="endPoints">EndPoints to send data to</param>
+        /// <param name="buffer">Data to send</param>
+        /// <param name="header">Header to append to the buffer</param>
+        public void Send(List<EndPoint> endPoints, byte[] buffer, byte[] header = null)
+        {
+            foreach (EndPoint endPoint in endPoints)
+                Send(endPoint, buffer, header);
+        }
+        
+        /// <summary>
         /// Receive thread function. Reads data from the socket and creates
         /// <c>SessionPackets</c>.
         /// </summary>
@@ -185,6 +266,8 @@ namespace Terralite
         {
             while (IsRunning)
             {
+                if (packets.Count == 0) continue;
+
                 SessionPacket sp = packets[0];
                 packets.RemoveAt(0);
 
