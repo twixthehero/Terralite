@@ -33,8 +33,6 @@ namespace Terralite
 
         protected const string DEFAULT_LOG = "log.txt";
         protected const int DEFAULT_PORT = 10346;
-        private const int MAX_SIZE = 1400;
-        private const int MAX_SEND_SIZE = 1450;
         private static byte[] HEADER_NON_RELIABLE = new byte[4] { 1, 0, 0, 0 };
 
         private Socket socket;
@@ -200,7 +198,7 @@ namespace Terralite
                 Log(e.StackTrace);
             }
         }
-        
+
         /// <summary>
         /// Encodes the <paramref name="text"/> parameter using UTF8
         /// and calls Send(byte[])
@@ -239,7 +237,7 @@ namespace Terralite
                 byte[] head = header ?? HEADER_NON_RELIABLE;
                 byte[] data = Combine(head, buffer);
 
-                if (data.Length <= MAX_SEND_SIZE)
+                if (data.Length <= Packet.MAX_SEND_SIZE)
                 {
                     if (Debug)
                         Log("Sending data size " + data.Length);
@@ -297,13 +295,32 @@ namespace Terralite
 
         /// <summary>
         /// Splits <paramref name="buffer"/> into two byte[] at <paramref name="index"/>.
+        /// If index is -1, it calculates where to split using the packet type.
         /// </summary>
         /// <param name="buffer">Byte[] to be split</param>
         /// <param name="index">Index to split at</param>
         /// <returns>Two byte arrays</returns>
-        private byte[][] Split(byte[] buffer, int index = 4)
+        private byte[][] Split(byte[] buffer, int index = -1)
         {
             byte[][] result = new byte[2][];
+
+            //calculate index from header
+            if (index == -1)
+            {
+                switch (buffer[0])
+                {
+                    case Packet.NON_RELIABLE:
+                        index = 1;
+                        break;
+                    case Packet.RELIABLE:
+                    case Packet.ACK:
+                        index = 2;
+                        break;
+                    case Packet.MULTI:
+                        index = 3;
+                        break;
+                }
+            }
 
             result[0] = new byte[index];
             result[1] = new byte[buffer.Length - (index + 1)];
@@ -323,14 +340,14 @@ namespace Terralite
         /// <returns></returns>
         private byte[][] SplitBuffer(byte[] header, byte[] buffer)
         {
-            byte[][] result = new byte[buffer.Length / MAX_SIZE][];
+            byte[][] result = new byte[buffer.Length / Packet.MAX_SIZE][];
             int size;
 
             byte[] tmp;
 
             for (uint i = 0; i < result.GetLength(0); i++)
             {
-                size = i == result.GetLength(0) - 1 ? buffer.Length % MAX_SIZE : MAX_SIZE;
+                size = i == result.GetLength(0) - 1 ? buffer.Length % Packet.MAX_SIZE : Packet.MAX_SIZE;
                 tmp = new byte[4 + size];
                 Array.Copy(buffer, i * 1404, tmp, 0, size);
 
@@ -354,7 +371,7 @@ namespace Terralite
             {
                 try
                 {
-                    buffer = new byte[MAX_SEND_SIZE];
+                    buffer = new byte[Packet.MAX_SEND_SIZE];
                     int numBytes = socket.ReceiveFrom(buffer, ref ep);
 
                     ProcessData(buffer, ep);
@@ -363,13 +380,6 @@ namespace Terralite
                 {
                     if (socket.Available == 0)
                         continue;
-                    /*else
-                    {
-                        byte[] remainder = new byte[socket.Available];
-                        int extraBytes = socket.ReceiveFrom(remainder, ref ep);
-
-                        ProcessData(buffer, ep, remainder);
-                    }*/
                 }
                 catch (Exception e)
                 {
@@ -404,7 +414,7 @@ namespace Terralite
 
             if (remainder == null)
             {
-                //pieces[0] = 4 byte header
+                //pieces[0] = header
                 //pieces[1] = data
                 byte[][] pieces = Split(buffer);
 

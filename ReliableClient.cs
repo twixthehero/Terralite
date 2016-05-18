@@ -49,15 +49,13 @@ namespace Terralite
         /// </remarks>
         public bool UseOrdering { get; set; }
 
-        private const ushort RELIABLE = 2;
-        private const ushort ACK = 3;
         private const float ORDER_TIMEOUT = 0.5f;
 
-        private Dictionary<ushort, GuaranteedPacket> guaranteedPackets;
-        private ushort nextSendID = 1;
+        private Dictionary<byte, GuaranteedPacket> guaranteedPackets;
+        private byte nextSendID = 1;
 
         private OrderedDictionary orderedPackets;
-        private ushort nextExpectedID;
+        private byte nextExpectedID;
 
         public ReliableClient() : this(DEFAULT_LOG) { }
         public ReliableClient(string logfile, int port = DEFAULT_PORT) : base(logfile, port)
@@ -68,7 +66,7 @@ namespace Terralite
             UseOrdering = true;
 
             MD5 = MD5.Create();
-            guaranteedPackets = new Dictionary<ushort, GuaranteedPacket>();
+            guaranteedPackets = new Dictionary<byte, GuaranteedPacket>();
             orderedPackets = new OrderedDictionary();
         }
 
@@ -90,7 +88,7 @@ namespace Terralite
             GuaranteedPacket gp = new GuaranteedPacket(this, nextSendID, packet, MaxRetries);
             guaranteedPackets.Add(gp.PacketID, gp);
 
-            nextSendID = (ushort)((nextSendID + 1) % ushort.MaxValue);
+            nextSendID = (byte)((nextSendID + 1) % byte.MaxValue);
 
             Send(gp.ByteArray);
         }
@@ -103,25 +101,25 @@ namespace Terralite
         /// <returns>Whether or not <c>OnReceive</c> needs to be called</returns>
         protected override bool OnPreReceive(byte[] header, byte[] data)
         {
-            ushort type = BitConverter.ToUInt16(header, 0);
+            byte type = header[0];
 
             //if non-reliable packet
             if (type == 1)
                 return true;
             //if unknown
-            else if (type != RELIABLE && type != ACK)
+            else if (type != Packet.RELIABLE && type != Packet.ACK)
             {
                 Log("Got unknown packet type " + type);
                 return false;
             }
 
-            ushort packetID = BitConverter.ToUInt16(header, 2);
+            byte packetID = header[1];
 
             if (guaranteedPackets.ContainsKey(packetID))
             {
                 switch (type)
                 {
-                    case RELIABLE:
+                    case Packet.RELIABLE:
                         if (UseMD5)
                         {
                             byte[] hash = new byte[32];
@@ -143,14 +141,14 @@ namespace Terralite
                             //if got next expected id
                             else if (packetID == nextExpectedID)
                             {
-                                nextExpectedID = (ushort)((nextExpectedID + 1) % ushort.MaxValue);
+                                nextExpectedID = (byte)((nextExpectedID + 1) % byte.MaxValue);
 
                                 //while we have the next sequential packet, call OnReceive for it
                                 while (orderedPackets.Contains(nextExpectedID))
                                 {
                                     OrderedPacket op = (OrderedPacket)orderedPackets[(object)nextExpectedID];
                                     orderedPackets.Remove(nextExpectedID);
-                                    nextExpectedID = (ushort)((nextExpectedID + 1) % ushort.MaxValue);
+                                    nextExpectedID = (byte)((nextExpectedID + 1) % byte.MaxValue);
 
                                     OnReceive(op.Data, op.Data.Length);
                                 }
@@ -161,7 +159,7 @@ namespace Terralite
                             orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data, ORDER_TIMEOUT));
                             return false;
                         }
-                    case ACK:
+                    case Packet.ACK:
                         ClearPacket(packetID);
                         return true;
                 }
@@ -180,7 +178,7 @@ namespace Terralite
         {
             OrderedPacket op = (OrderedPacket)orderedPackets[(object)packetid];
             orderedPackets.Remove(packetid);
-            nextExpectedID = (ushort)((packetid + 1) % ushort.MaxValue);
+            nextExpectedID = (byte)((packetid + 1) % byte.MaxValue);
 
             OnReceive(op.Data, op.Data.Length);
         }
@@ -189,7 +187,7 @@ namespace Terralite
         /// Called to remove a packet from the list
         /// </summary>
         /// <param name="id">ID of the packet to remove</param>
-        protected void ClearPacket(ushort id)
+        protected void ClearPacket(byte id)
         {
             guaranteedPackets[id].Dispose();
             guaranteedPackets.Remove(id);
@@ -199,13 +197,11 @@ namespace Terralite
         /// Sends an acknowledgement packet for <paramref name="packetid"/>.
         /// </summary>
         /// <param name="packetid">The packet id to acknowledge</param>
-        private void SendAck(ushort packetid)
+        private void SendAck(byte packetid)
         {
-            byte[] ack = new byte[4];
+            byte[] ack = new byte[2];
             ack[0] = 3;
-
-            byte[] pid = BitConverter.GetBytes(packetid);
-            Array.Copy(pid, 0, ack, 2, pid.Length);
+            ack[1] = packetid;
 
             Send(ack);
         }
@@ -215,7 +211,7 @@ namespace Terralite
         /// </summary>
         private class GuaranteedPacket
         {
-            public ushort PacketID { get; private set; }
+            public byte PacketID { get; private set; }
             public byte[] MD5 { get; private set; }
             public byte[] Header { get; private set; }
             public byte[] ByteArray { get; private set; }
@@ -227,7 +223,7 @@ namespace Terralite
 
             private int tries = 0;
 
-            public GuaranteedPacket(ReliableClient rc, ushort packetID, byte[] packet, int retries)
+            public GuaranteedPacket(ReliableClient rc, byte packetID, byte[] packet, int retries)
             {
                 PacketID = packetID;
                 reliableClient = rc;
@@ -289,13 +285,9 @@ namespace Terralite
             /// <returns>Byte array with type 2 + packet id</returns>
             private byte[] CreateHeader()
             {
-                byte[] header = new byte[4];
-
-                byte[] type = BitConverter.GetBytes((ushort)2);
-                Array.Copy(type, 0, header, 0, type.Length);
-
-                byte[] pid = BitConverter.GetBytes(PacketID);
-                Array.Copy(pid, 0, header, 2, pid.Length);
+                byte[] header = new byte[2];
+                header[0] = 2;
+                header[1] = PacketID;
 
                 return header;
             }
@@ -325,13 +317,13 @@ namespace Terralite
         /// </summary>
         private class OrderedPacket
         {
-            public ushort PacketID { get; set; }
+            public byte PacketID { get; set; }
             public byte[] Data { get; set; }
 
             private ReliableClient reliableClient;
             private Timer timer;
 
-            public OrderedPacket(ReliableClient rc, ushort packetID, byte[] packet, float timeout)
+            public OrderedPacket(ReliableClient rc, byte packetID, byte[] packet, float timeout)
             {
                 reliableClient = rc;
                 PacketID = packetID;
