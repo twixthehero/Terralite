@@ -174,7 +174,6 @@ namespace Terralite
                         return true;
                 }
             }
-            
 
             Log("Didn't send packet id " + packetID);
             return false;
