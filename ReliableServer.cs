@@ -13,8 +13,9 @@ namespace Terralite
     /// will be resent. Packets that arrive out of order will be fixed.
     /// Packets can be send with a 100% guarantee they will arrive.
     /// </summary>
-    public class ReliableServer : Server
+    public class ReliableServer : ReliableConnection
     {
+        /*
         /// <summary>
         /// Maximum number of send retries.
         /// Default value = 10.
@@ -366,6 +367,6 @@ namespace Terralite
                 };
                 timer.Start();
             }
-        }
+        }*/
     }
 }
