@@ -40,17 +40,6 @@ namespace Terralite
         public float RetryInterval { get; set; }
 
         /// <summary>
-        /// Whether or not to use MD5 verification.
-        /// Defaults to true.
-        /// </summary>
-        public bool UseMD5 { get; set; }
-
-        /// <summary>
-        /// Instance of MD5 class
-        /// </summary>
-        public MD5 MD5 { get; private set; }
-
-        /// <summary>
         /// Whether or not to use guaranteed ordering.
         /// Defaults to true.
         /// </summary>
@@ -63,8 +52,9 @@ namespace Terralite
 
         protected const string DEFAULT_LOG = "log.txt";
 
-        private Socket socket;
-        private Thread receiveThread;
+        private Socket socket = null;
+        private int port = 0;
+        private Thread receiveThread = null;
 
         private Dictionary<int, Connection> idToConnection;
         private Dictionary<EndPoint, Connection> epToConnection;
@@ -88,10 +78,8 @@ namespace Terralite
             ExitOnReceiveException = false;
             MaxRetries = 10;
             RetryInterval = 0.3f;
-            UseMD5 = true;
             UseOrdering = true;
-
-            MD5 = MD5.Create();
+            
             idToConnection = new Dictionary<int, Connection>();
             epToConnection = new Dictionary<EndPoint, Connection>();
 
@@ -126,6 +114,8 @@ namespace Terralite
         /// </summary>
         private void CreateSocket()
         {
+            if (socket != null) return;
+
             Log("Creating socket...");
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
@@ -133,7 +123,7 @@ namespace Terralite
             try
             {
                 Log("Binding socket...");
-                socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+                socket.Bind(new IPEndPoint(IPAddress.Any, port));
             }
             catch (SocketException e)
             {
@@ -151,6 +141,11 @@ namespace Terralite
                     if (ExitOnReceiveException)
                         Environment.Exit(1);
                 }
+                else
+                {
+                    port = ((IPEndPoint)socket.LocalEndPoint).Port;
+                    Log("Socket bound to " + socket.LocalEndPoint);
+                }
             }
         }
 
@@ -159,7 +154,8 @@ namespace Terralite
         /// </summary>
         /// <param name="to">IP address or hostname to connect to</param>
         /// <param name="port">Port to connect to</param>
-        public void Connect(string to, int port)
+        /// <returns>The connection ID or -1 if the connection creation failed</returns>
+        public int Connect(string to, int port)
         {
             IPAddress address = null;
             bool success = IPAddress.TryParse(to, out address);
@@ -197,8 +193,10 @@ namespace Terralite
                 receiveThread.Start();
             }
 
+            CreateSocket();
+
             //create new connection
-            CreateConnection(address, port);
+            return CreateConnection(address, port);
         }
 
         /// <summary>
@@ -206,18 +204,19 @@ namespace Terralite
         /// </summary>
         /// <param name="address">The address to connect to</param>
         /// <param name="port">The port to connect to</param>
-        private void CreateConnection(IPAddress address, int port)
+        /// <returns>The connection ID or -1 if connection creation failed</returns>
+        private int CreateConnection(IPAddress address, int port)
         {
             try
             {
                 EndPoint ep = new IPEndPoint(address, port);
-                Connection conn = new Connection(this, ep, nextConnectionID);
-                idToConnection.Add(nextConnectionID, conn);
+                int id = GetNextConnectionID();
+                Connection conn = new Connection(this, ep, id);
+                idToConnection.Add(id, conn);
                 epToConnection.Add(ep, conn);
 
                 Log("Connected to " + ep);
-
-                nextConnectionID = (nextConnectionID + 1) % int.MaxValue;
+                return conn.ID;
             }
             catch (Exception e)
             {
@@ -226,6 +225,17 @@ namespace Terralite
                     Log(e.InnerException);
                 Log(e.StackTrace);
             }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Returns the next available connection ID
+        /// </summary>
+        private int GetNextConnectionID()
+        {
+            nextConnectionID = (nextConnectionID + 1) % int.MaxValue;
+            return nextConnectionID;
         }
 
         /// <summary>
@@ -240,6 +250,12 @@ namespace Terralite
                 if (Debug)
                     Log("Not connected to any endpoints!");
 
+                return;
+            }
+
+            if (!idToConnection.ContainsKey(id))
+            {
+                Log("ID doesn't exist in connections: " + id);
                 return;
             }
 
@@ -259,8 +275,11 @@ namespace Terralite
                     if (idToConnection.Count == 0)
                     {
                         receiveThread.Abort();
+                        receiveThread = null;
+
                         socket.Shutdown(SocketShutdown.Both);
                         socket.Close();
+                        socket = null;
                     }
                 }
 
@@ -285,6 +304,38 @@ namespace Terralite
 
             idToConnection.Clear();
             epToConnection.Clear();
+        }
+
+        /// <summary>
+        /// Adds an event callback to the connection with id <paramref name="id"/>.
+        /// </summary>
+        /// <param name="id">Connection id to add the event to</param>
+        /// <param name="evt">The function callback</param>
+        public void AddReceiveEvent(int id, Connection.ReceiveEvent evt)
+        {
+            if (!idToConnection.ContainsKey(id))
+            {
+                Log("ID doesn't exist in connections: " + id);
+                return;
+            }
+
+            idToConnection[id].Receive += evt;
+        }
+
+        /// <summary>
+        /// Removes an event callback to the connection with id <paramref name="id"/>.
+        /// </summary>
+        /// <param name="id">Connection id to remove the event from</param>
+        /// <param name="evt">The function callback</param>
+        public void RemoveReceiveEvent(int id, Connection.ReceiveEvent evt)
+        {
+            if (!idToConnection.ContainsKey(id))
+            {
+                Log("ID doesn't exist in connections: " + id);
+                return;
+            }
+
+            idToConnection[id].Receive -= evt;
         }
 
         /// <summary>
@@ -399,8 +450,8 @@ namespace Terralite
                 Log("ID doesn't exist in connections: " + id);
                 return;
             }
-
-            idToConnection[id].SendPacket(packet, MD5.ComputeHash(packet));
+            
+            idToConnection[id].SendPacket(packet);
         }
 
         /// <summary>
@@ -433,6 +484,9 @@ namespace Terralite
                 }
                 catch (Exception e)
                 {
+                    if (e.Message.Contains("aborted"))
+                        continue;
+
                     Log(e.Message);
                     if (e.InnerException != null)
                         Log(e.InnerException);
@@ -455,6 +509,12 @@ namespace Terralite
             if (!epToConnection.ContainsKey(ep))
             {
                 Log("Received data from an unknown remote: " + ep);
+                return;
+            }
+
+            if (buffer[0] == Packet.DISCONNECT)
+            {
+                Log(ep + " disconnected.");
                 return;
             }
 

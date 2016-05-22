@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 using System.Timers;
 
 namespace Terralite
@@ -39,6 +40,7 @@ namespace Terralite
 
         private OrderedDictionary orderedPackets;
         private byte nextExpectedID;
+        private bool firstPacket = true;
         private byte[][] multiPacket = null;
 
         public Connection(ReliableConnection rc, EndPoint endPoint, int id)
@@ -57,10 +59,9 @@ namespace Terralite
         /// Creates a guaranteed packet from the data passed in.
         /// </summary>
         /// <param name="packet">Packet data</param>
-        /// <param name="md5">MD5 hash of the packet data</param>
-        public void SendPacket(byte[] packet, byte[] md5)
+        public void SendPacket(byte[] packet)
         {
-            GuaranteedPacket p = new GuaranteedPacket(nextSendID, packet, md5);
+            GuaranteedPacket p = new GuaranteedPacket(nextSendID, packet);
             guaranteedPackets.Add(nextSendID, p);
 
             nextSendID = (byte)((nextSendID + 1) % byte.MaxValue);
@@ -150,59 +151,55 @@ namespace Terralite
             }
 
             byte packetID = header[1];
-
-            if (guaranteedPackets.ContainsKey(packetID))
+            
+            switch (type)
             {
-                switch (type)
-                {
-                    case Packet.RELIABLE:
-                        if (reliableConnection.UseMD5)
-                        {
-                            byte[] hash = new byte[32];
-                            Array.Copy(data, hash, hash.Length);
+                case Packet.RELIABLE:
+                    SendAck(packetID);
 
-                            if (guaranteedPackets[packetID].CheckMD5(hash))
-                                SendAck(packetID);
-                        }
-                        else
-                            SendAck(packetID);
+                    if (!reliableConnection.UseOrdering)
+                        return true;
+                    else
+                    {
+                        if (firstPacket)
+                            nextExpectedID = packetID;
 
-                        if (!reliableConnection.UseOrdering)
-                            return true;
-                        else
+                        //if already timeout waiting for this packet
+                        if (packetID < nextExpectedID)
+                            return false;
+                        //if got next expected id
+                        else if (packetID == nextExpectedID)
                         {
-                            //if already timeout waiting for this packet
-                            if (packetID < nextExpectedID)
-                                return false;
-                            //if got next expected id
-                            else if (packetID == nextExpectedID)
+                            nextExpectedID = (byte)((nextExpectedID + 1) % byte.MaxValue);
+
+                            //while we have the next sequential packet, call OnReceive for it
+                            while (orderedPackets.Contains(nextExpectedID))
                             {
+                                OrderedPacket op = (OrderedPacket)orderedPackets[(object)nextExpectedID];
+                                orderedPackets.Remove(nextExpectedID);
                                 nextExpectedID = (byte)((nextExpectedID + 1) % byte.MaxValue);
 
-                                //while we have the next sequential packet, call OnReceive for it
-                                while (orderedPackets.Contains(nextExpectedID))
-                                {
-                                    OrderedPacket op = (OrderedPacket)orderedPackets[(object)nextExpectedID];
-                                    orderedPackets.Remove(nextExpectedID);
-                                    nextExpectedID = (byte)((nextExpectedID + 1) % byte.MaxValue);
-
-                                    OnReceive(op.Data);
-                                }
-
-                                return true;
+                                OnReceive(op.Data);
                             }
 
-                            orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data, Packet.ORDER_TIMEOUT));
-                            return false;
+                            return true;
                         }
-                    case Packet.ACK:
-                        ClearPacket(packetID);
-                        return true;
-                }
-            }
 
-            Log("Didn't send packet id " + packetID);
-            return false;
+                        orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data, Packet.ORDER_TIMEOUT));
+                        return false;
+                    }
+                case Packet.ACK:
+                    if (!guaranteedPackets.ContainsKey(packetID))
+                    {
+                        Log("Didn't send packet id " + packetID);
+                        return false;
+                    }
+
+                    ClearPacket(packetID);
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         /// <summary>
@@ -224,11 +221,7 @@ namespace Terralite
         /// <param name="packetid">The packet id to acknowledge</param>
         private void SendAck(byte packetid)
         {
-            byte[] ack = new byte[2];
-            ack[0] = 3;
-            ack[1] = packetid;
-
-            reliableConnection.Send(ID, ack);
+            reliableConnection.Send(ID, new byte[] { packetid }, new byte[] { Packet.ACK });
         }
 
         /// <summary>

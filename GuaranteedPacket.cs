@@ -8,7 +8,6 @@ namespace Terralite
     public class GuaranteedPacket
     {
         public byte PacketID { get; private set; }
-        public byte[] MD5 { get; private set; }
         public byte[] Header { get; private set; }
         public byte[] ByteArray { get; private set; }
         
@@ -19,31 +18,13 @@ namespace Terralite
             get; set;
         }
 
-        public GuaranteedPacket(byte packetID, byte[] md5, byte[] packet)
+        public GuaranteedPacket(byte packetID, byte[] packet)
         {
             PacketID = packetID;
             data = packet;
-
-            MD5 = md5;
+            
             Header = CreateHeader();
             ByteArray = ToByteArray();
-        }
-
-        /// <summary>
-        /// Checks a byte[] md5 sum against this packet's MD5 sum
-        /// </summary>
-        /// <param name="sum">MD5 hash sum</param>
-        /// <returns>Whether the MD5s match</returns>
-        public bool CheckMD5(byte[] sum)
-        {
-            if (sum.Length != MD5.Length)
-                return false;
-
-            for (int i = 0; i < sum.Length; i++)
-                if (MD5[i] != sum[i])
-                    return false;
-
-            return true;
         }
         
         /// <summary>
@@ -65,12 +46,9 @@ namespace Terralite
         /// <returns>Byte array with MD5 + packet data</returns>
         private byte[] ToByteArray()
         {
-            byte[] packet = new byte[MD5.Length + data.Length];
+            byte[] packet = new byte[data.Length];
 
             int index = 0;
-
-            Array.Copy(MD5, 0, packet, index, MD5.Length);
-            index += MD5.Length;
 
             Array.Copy(data, 0, packet, index, data.Length);
             index += data.Length;
