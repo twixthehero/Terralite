@@ -43,6 +43,41 @@ namespace Terralite
         }
 
         /// <summary>
+        /// Splits <paramref name="buffer"/> into two byte[] at <paramref name="index"/>.
+        /// If index is -1, it calculates where to split using the packet type.
+        /// </summary>
+        /// <param name="buffer">Byte[] to be split</param>
+        /// <param name="index">Index to split at</param>
+        /// <returns>Two byte arrays</returns>
+        public static byte[][] Split(byte[] buffer, int index = -1)
+        {
+            byte[][] result = new byte[2][];
+
+            //calculate index from header
+            if (index == -1)
+            {
+                switch (buffer[0])
+                {
+                    case Packet.NON_RELIABLE:
+                        index = 1;
+                        break;
+                    case Packet.RELIABLE:
+                    case Packet.ACK:
+                        index = 2;
+                        break;
+                }
+            }
+
+            result[0] = new byte[index];
+            result[1] = new byte[buffer.Length - index];
+
+            Array.Copy(buffer, result[0], result[0].Length);
+            Array.Copy(buffer, index, result[1], 0, result[1].Length);
+
+            return result;
+        }
+
+        /// <summary>
         /// Takes two byte arrays and returns their combination
         /// </summary>
         /// <param name="buffer1">The first byte array</param>

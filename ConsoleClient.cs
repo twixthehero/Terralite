@@ -13,19 +13,16 @@ namespace Terralite
 
         private const int DEFAULT_PORT = 10346;
 
-        private ReliableClient rc;
+        private ReliableConnection rc;
         private bool run;
+
+        private int connection;
 
         public ConsoleClient()
         {
             ReliableMode = false;
 
-            rc = new ReliableClient(null);
-            rc.Receive += (buffer, len) =>
-            {
-                Console.WriteLine(Encoding.UTF8.GetString(buffer));
-            };
-
+            rc = new ReliableConnection(null);
             run = true;
 
             string line;
@@ -42,16 +39,21 @@ namespace Terralite
                 else if (rc.IsConnected)
                 {
                     if (ReliableMode)
-                        rc.SendReliable(line);
+                        rc.SendReliable(connection, line);
                     else
-                        rc.Send(line);
+                        rc.Send(connection, line);
                 }
                 else
                     Console.WriteLine("You must be connected to send text!");
             }
             while (run);
 
-            rc.Disconnect();
+            rc.Disconnect(connection);
+        }
+
+        private void OnReceive(byte[] data)
+        {
+            Console.WriteLine(Encoding.UTF8.GetString(data));
         }
 
         /// <summary>
@@ -101,11 +103,12 @@ namespace Terralite
                         return;
                     }
 
-                    rc.Connect(ip, port);
+                    connection = rc.Connect(ip, port);
+                    rc.AddReceiveEvent(connection, OnReceive);
                     break;
                 case "dc":
                 case "disconnect":
-                    rc.Disconnect();
+                    rc.Disconnect(connection);
                     break;
                 case "r":
                 case "reliable":
