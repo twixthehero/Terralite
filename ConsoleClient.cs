@@ -22,7 +22,7 @@ namespace Terralite
         {
             ReliableMode = false;
 
-            rc = new ReliableConnection(null);
+            rc = new ReliableConnection();
             run = true;
 
             string line;
@@ -36,7 +36,7 @@ namespace Terralite
 
                 if (line[0] == '/')
                     ParseCommand(line);
-                else if (rc.IsConnected)
+                else if (rc.HasConnections)
                 {
                     if (ReliableMode)
                         rc.SendReliable(connection, line);
@@ -51,7 +51,7 @@ namespace Terralite
             rc.Disconnect(connection);
         }
 
-        private void OnReceive(byte[] data)
+        private void OnReceive(int connId, byte[] data)
         {
             Console.WriteLine(Encoding.UTF8.GetString(data));
         }
