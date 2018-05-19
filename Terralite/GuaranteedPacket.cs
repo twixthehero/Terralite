@@ -11,6 +11,8 @@ namespace Terralite
 		public byte[] Header { get; private set; }
 		public byte[] ByteArray { get; private set; }
 
+		public int Tries { get; set; } = 0;
+
 		private byte[] data;
 
 		public GuaranteedPacket(byte packetID, byte[] packet)

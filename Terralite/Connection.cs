@@ -31,11 +31,6 @@ namespace Terralite
 		/// </summary>
 		public int ID { get; private set; }
 
-		/// <summary>
-		/// Maximum number of packet send retries
-		/// </summary>
-		public int MaxTries { get; set; }
-
 		public delegate void ReceiveEvent(int connId, byte[] data);
 		public event ReceiveEvent Receive;
 
@@ -74,7 +69,6 @@ namespace Terralite
 			_reliableConnection = reliableConnection;
 			EndPoint = endPoint;
 			ID = id;
-			MaxTries = reliableConnection.MaxRetries;
 
 			_guaranteedPackets = new Dictionary<byte, GuaranteedPacket>();
 			_timers = new Dictionary<byte, Timer>();
@@ -142,12 +136,19 @@ namespace Terralite
 			};
 			timer.Elapsed += (sender, e) =>
 			{
+				guaranteedPacket.Tries++;
 				_reliableConnection.Send(ID, guaranteedPacket.ByteArray, guaranteedPacket.Header);
+
+				if (guaranteedPacket.Tries >= _reliableConnection.MaxRetries)
+				{
+
+				}
 			};
 			timer.Start();
 			_timers.Add(guaranteedPacket.PacketID, timer);
 
 			_reliableConnection.Send(ID, guaranteedPacket.ByteArray, guaranteedPacket.Header);
+			guaranteedPacket.Tries++;
 		}
 
 		/// <summary>

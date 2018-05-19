@@ -23,15 +23,6 @@ namespace TerraliteTests
 			socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
 			ReliableServer rs = new ReliableServer();
-			rs.SetDefaultReceiveEvent((id, data) =>
-			{
-				string d = "";
-				foreach (byte b in data)
-				{
-					d += $"[{b}]";
-				}
-				Console.WriteLine($"Data: {d}");
-			});
 			EndPoint to = new IPEndPoint(IPAddress.Loopback, rs.Port);
 
 			Random r = new Random();
@@ -72,15 +63,6 @@ namespace TerraliteTests
 			socket.Bind(new IPEndPoint(IPAddress.Any, 2000));
 
 			ReliableConnection rc = new ReliableConnection();
-			rc.SetDefaultReceiveEvent((id, data) =>
-			{
-				string d = "";
-				foreach (byte b in data)
-				{
-					d += $"[{b}]";
-				}
-				Console.WriteLine($"Data: {d}");
-			});
 			int connId = rc.Connect("127.0.0.1", 2000);
 
 			EndPoint from = new IPEndPoint(IPAddress.Any, 0);
