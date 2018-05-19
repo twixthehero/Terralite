@@ -69,6 +69,8 @@ namespace Terralite
 		/// </summary>
 		public float RetryInterval { get; set; }
 
+		private bool Running { get; set; }
+
 		/// <summary>
 		/// Whether or not to use guaranteed ordering.
 		/// Defaults to true.
@@ -404,6 +406,8 @@ namespace Terralite
 			Log("Stopping receive thread...");
 			if (receiveThread != null)
 			{
+				Running = false;
+
 				if (socket.Blocking)
 				{
 					receiveThread.Abort();
@@ -707,11 +711,12 @@ namespace Terralite
 		{
 			while (!HasConnections) { /* Wait for the connection to finish being created */}
 
+			Running = true;
 			byte[] buffer = new byte[Packet.MAX_SEND_SIZE];
 			byte[] truncated = null;
 			EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
 
-			while (HasConnections)
+			while (Running)
 			{
 				try
 				{
