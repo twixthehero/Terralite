@@ -106,6 +106,9 @@ namespace TerraliteTests
 
 			Assert.AreEqual(generated + 1, calculated);
 			Assert.AreEqual(generated2 + 1, calculated2);
+			
+			rc.Shutdown();
+			socket.Close();
 		}
 	}
 }
