@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 
 namespace Terralite
 {
@@ -14,27 +13,21 @@ namespace Terralite
 		/// <returns></returns>
 		public static byte[][] SplitBuffer(byte[] head, byte[] buffer)
 		{
-			byte[][] result = new byte[buffer.Length / Packet.MAX_SIZE][];
-			int size;
-
-			MemoryStream s;
-			byte[] tmp;
+			byte[][] result = new byte[buffer.Length / Packet.MAX_SIZE + 1][];
 			byte[] header;
+			byte[] tmp;
 			byte pid = 1;
 
 			for (uint i = 0; i < result.GetLength(0); i++)
 			{
-				s = new MemoryStream(5);
-				s.WriteByte(Packet.MULTI);
-				s.WriteByte((byte)result.GetLength(0));
-				s.WriteByte(pid++);
-				s.Write(head, 0, head.Length);
-				header = new byte[s.Length];
-				s.Read(header, 0, header.Length);
-
-				size = i == result.GetLength(0) - 1 ? buffer.Length % Packet.MAX_SIZE : Packet.MAX_SIZE;
-				tmp = new byte[header.Length + size];
-				Array.Copy(buffer, i * (Packet.MAX_SIZE + header.Length), tmp, 0, size);
+				header = new byte[3 + head.Length];
+				header[0] = Packet.MULTI;
+				header[1] = (byte)result.GetLength(0);
+				header[2] = pid++;
+				Array.Copy(head, 0, header, 3, head.Length);
+				
+				tmp = new byte[i == result.GetLength(0) - 1 ? buffer.Length % Packet.MAX_SIZE : Packet.MAX_SIZE];
+				Array.Copy(buffer, i * Packet.MAX_SIZE, tmp, 0, tmp.Length);
 
 				result[i] = Combine(header, tmp);
 			}
