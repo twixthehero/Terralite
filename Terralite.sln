@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.27703.2000
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Terralite", "Terralite\Terralite.csproj", "{CEDF5675-E63E-476B-B772-74105E812CE9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraliteTests", "TerraliteTests\TerraliteTests.csproj", "{B9AFF6A4-46B9-4B54-BA88-A6DE944B187A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{CEDF5675-E63E-476B-B772-74105E812CE9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CEDF5675-E63E-476B-B772-74105E812CE9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CEDF5675-E63E-476B-B772-74105E812CE9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9AFF6A4-46B9-4B54-BA88-A6DE944B187A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9AFF6A4-46B9-4B54-BA88-A6DE944B187A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9AFF6A4-46B9-4B54-BA88-A6DE944B187A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9AFF6A4-46B9-4B54-BA88-A6DE944B187A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
