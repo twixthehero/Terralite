@@ -141,7 +141,9 @@ namespace Terralite
 
 				if (guaranteedPacket.Tries >= _reliableConnection.MaxRetries)
 				{
-
+					timer.Stop();
+					_timers.Remove(guaranteedPacket.PacketID);
+					_guaranteedPackets.Remove(guaranteedPacket.PacketID);
 				}
 			};
 			timer.Start();
