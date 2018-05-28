@@ -59,9 +59,9 @@ namespace Terralite
 		/// </summary>
 		private Timer _timeout;
 
+		private Timer _discardTimer;
 		private OrderedDictionary _orderedPackets;
 		private byte _nextExpectedID;
-		private bool _firstPacket = true;
 		private byte[][] _multiPacket = null;
 
 		public Connection(ReliableConnection reliableConnection, EndPoint endPoint, int id)
@@ -100,6 +100,13 @@ namespace Terralite
 			{
 				_handshakeInitTimer.Stop();
 				_handshakeTimeout.Stop();
+			};
+
+			_discardTimer = new Timer(3000);
+			_discardTimer.Elapsed += (o, e) =>
+			{
+				_nextExpectedID = (byte)((_nextExpectedID + 1) % byte.MaxValue);
+				CheckOrdered();
 			};
 		}
 
@@ -148,7 +155,7 @@ namespace Terralite
 			};
 			timer.Start();
 			_timers.Add(guaranteedPacket.PacketID, timer);
-
+			
 			_reliableConnection.Send(ID, guaranteedPacket.ByteArray, guaranteedPacket.Header);
 			guaranteedPacket.Tries++;
 		}
@@ -280,34 +287,38 @@ namespace Terralite
 					SendAck(packetID);
 
 					if (!_reliableConnection.UseOrdering)
+					{
 						return true;
+					}
 					else
 					{
-						if (_firstPacket)
-							_nextExpectedID = packetID;
-
-						//if already timeout waiting for this packet
-						if (packetID < _nextExpectedID)
-							return false;
-						//if got next expected id
-						else if (packetID == _nextExpectedID)
+						if (packetID == _nextExpectedID)
 						{
-							_nextExpectedID = (byte)((_nextExpectedID + 1) % byte.MaxValue);
-
-							//while we have the next sequential packet, call OnReceive for it
-							while (_orderedPackets.Contains(_nextExpectedID))
+							if (_discardTimer.Enabled)
 							{
-								OrderedPacket op = (OrderedPacket)_orderedPackets[(object)_nextExpectedID];
-								_orderedPackets.Remove(_nextExpectedID);
-								_nextExpectedID = (byte)((_nextExpectedID + 1) % byte.MaxValue);
-
-								OnReceive(op.Data);
+								_discardTimer.Stop();
 							}
 
-							return true;
+							OnReceive(data);
+							_nextExpectedID = (byte)((_nextExpectedID + 1) % byte.MaxValue);
+
+							// while we have the next sequential packet, call OnReceive for it
+							CheckOrdered();
+						}
+						else if (packetID < _nextExpectedID)
+						{
+							// discard, packet came too late to order
+						}
+						else
+						{
+							if (!_discardTimer.Enabled)
+							{
+								_discardTimer.Start();
+							}
+
+							_orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data));
 						}
 
-						_orderedPackets.Add(packetID, new OrderedPacket(this, packetID, data));
 						return false;
 					}
 				case Packet.ACK:
@@ -501,6 +512,21 @@ namespace Terralite
 
 			_guaranteedPackets.Clear();
 			_timers.Clear();
+		}
+
+		/// <summary>
+		/// Checks the ordered packet dictionary against the next expected packet ID
+		/// </summary>
+		private void CheckOrdered()
+		{
+			while (_orderedPackets.Contains(_nextExpectedID))
+			{
+				OrderedPacket op = (OrderedPacket)_orderedPackets[(object)_nextExpectedID];
+				_orderedPackets.Remove(_nextExpectedID);
+				_nextExpectedID = (byte)((_nextExpectedID + 1) % byte.MaxValue);
+
+				OnReceive(op.Data);
+			}
 		}
 
 		/// <summary>

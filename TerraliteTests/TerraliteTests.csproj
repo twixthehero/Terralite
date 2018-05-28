@@ -51,6 +51,7 @@
     <Compile Include="HandshakeTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ReliabilityTest.cs" />
+    <Compile Include="OrderingTest.cs" />
     <Compile Include="UtilTests.cs" />
   </ItemGroup>
   <ItemGroup>
